@@ -1,0 +1,62 @@
+{
+  "name": "reguide",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "dist/reguide.umd.cjs",
+  "module": "dist/reguide.js",
+  "types": "dist/index.d.ts",
+  "style": "dist/reguide.css",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/reguide.js",
+      "require": "./dist/reguide.umd.cjs"
+    },
+    "./style.css": "./dist/reguide.css"
+  },
+  "files": [
+    "dist"
+  ],
+  "license": "ISC",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/DanBermanTech/reguide"
+  },
+  "author": {
+    "name": "Dan Berman",
+    "url": "https://DanBerman.dev"
+  },
+  "description": "A React library for guided tours",
+  "homepage": "https://github.com/DanBermanTech/reguide",
+  "bugs":{
+    "url": "https://github.com/DanBermanTech/reguide/issues"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build && tsc -p tsconfig.build.json",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "peerDependencies": {
+    "react": "^18.0.0 || ^19.0.0",
+    "react-dom": "^18.0.0 || ^19.0.0"
+  },
+  "devDependencies": {
+    "@testing-library/jest-dom": "^6.8.0",
+    "@testing-library/react": "^16.3.0",
+    "@testing-library/user-event": "^14.6.1",
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
+    "jsdom": "^26.1.0",
+    "typescript": "~6.0.2",
+    "vite": "^8.1.1",
+    "vitest": "^3.2.4",
+    "@vitejs/plugin-react": "^6.0.3"
+  },
+  "keywords": [
+    "react",
+    "guide",
+    "tour",
+    "onboard"
+  ]
+}
