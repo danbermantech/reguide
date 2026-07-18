@@ -28,7 +28,7 @@
   },
   "description": "A React library for guided tours",
   "homepage": "https://github.com/DanBermanTech/reguide",
-  "bugs":{
+  "bugs": {
     "url": "https://github.com/DanBermanTech/reguide/issues"
   },
   "scripts": {
@@ -47,11 +47,12 @@
     "@testing-library/user-event": "^14.6.1",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.3",
+    "@vitest/coverage-v8": "3.2.7",
     "jsdom": "^26.1.0",
     "typescript": "~6.0.2",
     "vite": "^8.1.1",
-    "vitest": "^3.2.4",
-    "@vitejs/plugin-react": "^6.0.3"
+    "vitest": "^3.2.4"
   },
   "keywords": [
     "react",

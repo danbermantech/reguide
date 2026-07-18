@@ -149,6 +149,7 @@ function getPersistenceStorage(persistence?: ReguidePersistenceOptions): Storage
     return persistence.storage
   }
 
+  /* c8 ignore next 3 */
   if (typeof window === 'undefined') {
     return null
   }
@@ -688,6 +689,8 @@ export function ReguideProvider({
 
   const canGoPrev = currentStepIndex > 0
   const isLastStep = currentStepIndex === steps.length - 1
+  const hideNextButton = stepMode === 'click'
+    || (stepMode === 'custom' && currentStep?.mode === 'custom' && Boolean(currentStep.progressOnValidate))
   const modeRequirement = stepMode === 'interact'
     ? interactionSatisfied
     : stepMode === 'custom'
@@ -807,7 +810,8 @@ export function ReguideProvider({
                           Close
                         </button>
                       )
-                    : (
+                    : !hideNextButton
+                      ? (
                         <button
                           type="button"
                           data-kind="primary"
@@ -816,7 +820,8 @@ export function ReguideProvider({
                         >
                           Next
                         </button>
-                      )}
+                        )
+                      : null}
                 </div>
               </div>
             </div>,

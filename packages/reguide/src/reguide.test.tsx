@@ -1,5 +1,5 @@
 import { createRef, type RefObject } from 'react'
-import { render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { vi } from 'vitest'
 import { ReguideProvider, useReguide } from './reguide'
@@ -31,9 +31,29 @@ function IdControls() {
   const guide = useReguide()
 
   return (
-    <button type="button" onClick={() => guide.goToStepById('finish')}>
-      Go to finish
-    </button>
+    <div>
+      <button type="button" onClick={() => guide.goToStepById('finish')}>
+        Go to finish
+      </button>
+      <button type="button" onClick={() => guide.goToStepById('missing')}>
+        Go to missing
+      </button>
+    </div>
+  )
+}
+
+function IndexControls() {
+  const guide = useReguide()
+
+  return (
+    <div>
+      <button type="button" onClick={() => guide.goToStep(99)}>
+        Go to high index
+      </button>
+      <button type="button" onClick={() => guide.goToStep(-10)}>
+        Go to low index
+      </button>
+    </div>
   )
 }
 
@@ -76,6 +96,8 @@ describe('ReguideProvider', () => {
     ]
 
     render(<TestHarness steps={steps} />)
+
+    expect(screen.queryByRole('button', { name: 'Next' })).not.toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: 'Target 1' }))
 
@@ -163,6 +185,96 @@ describe('ReguideProvider', () => {
 
     expect(screen.queryByRole('button', { name: 'Next' })).not.toBeInTheDocument()
     expect(screen.getAllByRole('button', { name: 'Close' })).toHaveLength(1)
+  })
+
+  it('goes back when Back is clicked on a later step', async () => {
+    const user = userEvent.setup()
+    const steps: ReguideStep[] = [
+      {
+        targetRef: createRef<HTMLElement>(),
+        title: 'First',
+        body: 'Move forward',
+      },
+      {
+        targetRef: createRef<HTMLElement>(),
+        title: 'Second',
+        body: 'Move backward',
+      },
+    ]
+
+    render(<TestHarness steps={steps} />)
+
+    await user.click(screen.getByRole('button', { name: 'Next' }))
+    await user.click(screen.getByRole('button', { name: 'Back' }))
+
+    expect(screen.getByText('First')).toBeInTheDocument()
+    expect(screen.getByTestId('index')).toHaveTextContent('0')
+  })
+
+  it('closes on Escape key', () => {
+    const steps: ReguideStep[] = [
+      {
+        targetRef: createRef<HTMLElement>(),
+        title: 'First',
+        body: 'Press escape',
+      },
+    ]
+
+    render(<TestHarness steps={steps} />)
+
+    fireEvent.keyDown(document, { key: 'Escape' })
+
+    expect(screen.queryByRole('dialog', { name: 'First' })).not.toBeInTheDocument()
+  })
+
+  it('traps keyboard focus inside dialog with Tab and Shift+Tab', () => {
+    const steps: ReguideStep[] = [
+      {
+        targetRef: createRef<HTMLElement>(),
+        title: 'First',
+        body: 'Check focus trap',
+      },
+      {
+        targetRef: createRef<HTMLElement>(),
+        title: 'Second',
+        body: 'Second step',
+      },
+    ]
+
+    render(<TestHarness steps={steps} />)
+
+    const closeSecondary = screen.getByRole('button', { name: 'Close' })
+    const next = screen.getByRole('button', { name: 'Next' })
+
+    closeSecondary.focus()
+    fireEvent.keyDown(document, { key: 'Tab', shiftKey: true })
+    expect(next).toHaveFocus()
+
+    next.focus()
+    fireEvent.keyDown(document, { key: 'Tab' })
+    expect(closeSecondary).toHaveFocus()
+  })
+
+  it('returns early on Tab when no focusable elements are found', () => {
+    const querySpy = vi
+      .spyOn(HTMLDivElement.prototype, 'querySelectorAll')
+      .mockReturnValue([] as unknown as NodeListOf<HTMLElement>)
+
+    const steps: ReguideStep[] = [
+      {
+        targetRef: createRef<HTMLElement>(),
+        title: 'First',
+        body: 'No focusables test',
+      },
+    ]
+
+    render(<TestHarness steps={steps} />)
+
+    expect(() => {
+      fireEvent.keyDown(document, { key: 'Tab' })
+    }).not.toThrow()
+
+    querySpy.mockRestore()
   })
 
   it('applies global theme tokens', () => {
@@ -303,6 +415,100 @@ describe('ReguideProvider', () => {
     expect(screen.getByText('Step 2 of 2')).toBeInTheDocument()
   })
 
+  it('uses full step theme overrides including string sizes and NaN opacity fallback', () => {
+    const rectSpy = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(() => ({
+      x: 0,
+      y: 0,
+      left: 20,
+      top: 20,
+      right: 120,
+      bottom: 40,
+      width: 100,
+      height: 20,
+      toJSON: () => ({}),
+    }))
+
+    const steps: ReguideStep[] = [
+      {
+        targetRef: createRef<HTMLElement>(),
+        title: 'Step themed',
+        body: 'Theme details',
+        theme: {
+          backdrop: {
+            color: '#0ea5e9',
+            opacity: Number.NaN,
+          },
+          card: {
+            background: '#111111',
+            border: '3px solid #22c55e',
+            padding: '2rem',
+            verticalOffset: 18,
+          },
+          title: {
+            fontFamily: 'Georgia, serif',
+            fontWeight: 700,
+            color: '#fafafa',
+          },
+          body: {
+            fontFamily: 'Georgia, serif',
+            fontWeight: 500,
+            color: '#d4d4d4',
+          },
+          buttons: {
+            secondary: {
+              background: '#dcfce7',
+              border: '1px solid #15803d',
+              color: '#14532d',
+              fontFamily: 'Georgia, serif',
+              fontWeight: 600,
+            },
+            primary: {
+              background: '#0369a1',
+              border: '1px solid #075985',
+              color: '#f8fafc',
+              fontFamily: 'Georgia, serif',
+              fontWeight: 700,
+            },
+          },
+          stepCount: {
+            show: true,
+          },
+          highlight: {
+            borderRadius: '50%',
+            padding: 10,
+          },
+        },
+      },
+    ]
+
+    render(
+      <ReguideProvider
+        steps={steps}
+        initialOpen
+        theme={{
+          backdrop: {
+            color: '#ef4444',
+            opacity: 0.2,
+          },
+        }}
+      >
+        <Targets steps={steps} />
+      </ReguideProvider>,
+    )
+
+    const layer = document.querySelector('.reguide-layer') as HTMLElement
+    const cutout = document.querySelector('.reguide-cutout') as HTMLElement
+
+    expect(layer).toHaveStyle('--reguide-card-padding: 2rem')
+    expect(layer).toHaveStyle('--reguide-card-background: #111111')
+    expect(cutout).toHaveStyle('border-radius: 50%')
+    expect(cutout).toHaveStyle(
+      'box-shadow: 0 0 0 9999px color-mix(in srgb, #0ea5e9 62%, transparent), 0 8px 28px rgba(2, 6, 23, 0.5)',
+    )
+
+    rectSpy.mockRestore()
+  })
+
   it('gates Next in custom mode until validator passes', async () => {
     const user = userEvent.setup()
     const steps: ReguideStep[] = [
@@ -379,6 +585,126 @@ describe('ReguideProvider', () => {
     })
   })
 
+  it('keeps Next disabled when custom validator throws', async () => {
+    const user = userEvent.setup()
+    const steps: ReguideStep[] = [
+      {
+        targetRef: createRef<HTMLElement>(),
+        title: 'Step one',
+        body: 'Go to validator step',
+      },
+      {
+        targetRef: createRef<HTMLElement>(),
+        title: 'Throwing validation',
+        body: 'Validator throws',
+        mode: 'custom',
+        validator: () => {
+          throw new Error('Validation failed unexpectedly')
+        },
+      },
+      {
+        targetRef: createRef<HTMLElement>(),
+        title: 'Complete',
+        body: 'Done',
+      },
+    ]
+
+    render(<TestHarness steps={steps} />)
+
+    await user.click(screen.getByRole('button', { name: 'Next' }))
+
+    const next = screen.getByRole('button', { name: 'Next' })
+    fireEvent.input(screen.getByLabelText('Target 2'), { target: { value: 'boom' } })
+
+    expect(next).toBeDisabled()
+  })
+
+  it('returns early if a custom step is mutated to a non-custom mode at runtime', async () => {
+    const user = userEvent.setup()
+    const validator = vi.fn(() => true)
+    const steps: ReguideStep[] = [
+      {
+        targetRef: createRef<HTMLElement>(),
+        title: 'Step one',
+        body: 'Go to validator step',
+      },
+      {
+        targetRef: createRef<HTMLElement>(),
+        title: 'Custom step',
+        body: 'Mutated mode',
+        mode: 'custom',
+        validator,
+      },
+      {
+        targetRef: createRef<HTMLElement>(),
+        title: 'Complete',
+        body: 'Done',
+      },
+    ]
+
+    render(<TestHarness steps={steps} />)
+
+    await user.click(screen.getByRole('button', { name: 'Next' }))
+
+    ;(steps[1] as { mode?: string }).mode = 'default'
+    fireEvent.input(screen.getByLabelText('Target 2'), { target: { value: 'abc' } })
+
+    expect(validator).not.toHaveBeenCalled()
+    expect(screen.getByRole('button', { name: 'Next' })).toBeDisabled()
+  })
+
+  it('ignores stale validator rejection from an older run', async () => {
+    const user = userEvent.setup()
+    type ValidatorControl = {
+      resolve: (value: boolean) => void
+      reject: (error?: unknown) => void
+    }
+    const controls: ValidatorControl[] = []
+
+    const steps: ReguideStep[] = [
+      {
+        targetRef: createRef<HTMLElement>(),
+        title: 'Step one',
+        body: 'Go to validator step',
+      },
+      {
+        targetRef: createRef<HTMLElement>(),
+        title: 'Async race validation',
+        body: 'Latest run wins',
+        mode: 'custom',
+        validator: () => new Promise<boolean>((resolve, reject) => {
+          controls.push({ resolve, reject })
+        }),
+      },
+      {
+        targetRef: createRef<HTMLElement>(),
+        title: 'Complete',
+        body: 'Done',
+      },
+    ]
+
+    render(<TestHarness steps={steps} />)
+
+    await user.click(screen.getByRole('button', { name: 'Next' }))
+
+    const next = screen.getByRole('button', { name: 'Next' })
+    const input = screen.getByLabelText('Target 2')
+
+    fireEvent.input(input, { target: { value: 'first' } })
+    fireEvent.input(input, { target: { value: 'second' } })
+
+    controls[1].resolve(true)
+    await waitFor(() => {
+      expect(next).toBeEnabled()
+    })
+
+    controls[0].reject(new Error('Late rejection from stale run'))
+
+    await waitFor(() => {
+      expect(next).toBeEnabled()
+    })
+  })
+
   it('can auto-progress when custom validation passes', async () => {
     const user = userEvent.setup()
     const steps: ReguideStep[] = [
@@ -408,6 +734,8 @@ describe('ReguideProvider', () => {
     render(<TestHarness steps={steps} />)
 
     await user.click(screen.getByRole('button', { name: 'Next' }))
+    expect(screen.queryByRole('button', { name: 'Next' })).not.toBeInTheDocument()
+
     await user.type(screen.getByLabelText('Target 2'), 'unlock')
 
     await waitFor(() => {
@@ -466,6 +794,85 @@ describe('ReguideProvider', () => {
     expect(document.querySelector('.reguide-cutout')).not.toBeInTheDocument()
   })
 
+  it('does not render a dialog when there are no steps', () => {
+    render(
+      <ReguideProvider steps={[]} initialOpen>
+        <div>App content</div>
+      </ReguideProvider>,
+    )
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+
+  it('positions card above target when there is not enough room below', () => {
+    const rectSpy = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(() => ({
+      x: 0,
+      y: 0,
+      left: 100,
+      top: 760,
+      right: 220,
+      bottom: 790,
+      width: 120,
+      height: 30,
+      toJSON: () => ({}),
+    }))
+
+    const steps: ReguideStep[] = [
+      {
+        targetRef: createRef<HTMLElement>(),
+        title: 'Near bottom',
+        body: 'Card should move above',
+      },
+    ]
+
+    render(
+      <ReguideProvider steps={steps} initialOpen>
+        <Targets steps={steps} />
+      </ReguideProvider>,
+    )
+
+    const card = document.querySelector('.reguide-card') as HTMLElement
+    expect(card).toHaveStyle('top: 520px')
+
+    rectSpy.mockRestore()
+  })
+
+  it('recalculates target position on window resize and scroll', () => {
+    const rectSpy = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(() => ({
+      x: 0,
+      y: 0,
+      left: 100,
+      top: 100,
+      right: 220,
+      bottom: 130,
+      width: 120,
+      height: 30,
+      toJSON: () => ({}),
+    }))
+
+    const steps: ReguideStep[] = [
+      {
+        targetRef: createRef<HTMLElement>(),
+        title: 'Resizable',
+        body: 'Recalculate on window changes',
+      },
+    ]
+
+    render(
+      <ReguideProvider steps={steps} initialOpen>
+        <Targets steps={steps} />
+      </ReguideProvider>,
+    )
+
+    const callsBefore = rectSpy.mock.calls.length
+    fireEvent(window, new Event('resize'))
+    fireEvent(window, new Event('scroll'))
+
+    expect(rectSpy.mock.calls.length).toBeGreaterThan(callsBefore)
+
+    rectSpy.mockRestore()
+  })
+
   it('supports goToStepById navigation', async () => {
     const user = userEvent.setup()
     const steps: ReguideStep[] = [
@@ -495,6 +902,88 @@ describe('ReguideProvider', () => {
 
     expect(screen.getByTestId('index')).toHaveTextContent('1')
     expect(screen.getByText('Finish')).toBeInTheDocument()
+  })
+
+  it('does nothing when goToStepById receives an unknown id', async () => {
+    const user = userEvent.setup()
+    const steps: ReguideStep[] = [
+      {
+        id: 'intro',
+        targetRef: createRef<HTMLElement>(),
+        title: 'Intro',
+        body: 'First',
+      },
+      {
+        id: 'finish',
+        targetRef: createRef<HTMLElement>(),
+        title: 'Finish',
+        body: 'Last',
+      },
+    ]
+
+    render(
+      <ReguideProvider steps={steps} initialOpen>
+        <Controls />
+        <IdControls />
+        <Targets steps={steps} />
+      </ReguideProvider>,
+    )
+
+    await user.click(screen.getByRole('button', { name: 'Go to missing' }))
+
+    expect(screen.getByTestId('index')).toHaveTextContent('0')
+    expect(screen.getByText('Intro')).toBeInTheDocument()
+  })
+
+  it('clamps goToStep target index to valid range', async () => {
+    const user = userEvent.setup()
+    const steps: ReguideStep[] = [
+      {
+        id: 'intro',
+        targetRef: createRef<HTMLElement>(),
+        title: 'Intro',
+        body: 'First',
+      },
+      {
+        id: 'middle',
+        targetRef: createRef<HTMLElement>(),
+        title: 'Middle',
+        body: 'Second',
+      },
+      {
+        id: 'finish',
+        targetRef: createRef<HTMLElement>(),
+        title: 'Finish',
+        body: 'Last',
+      },
+    ]
+
+    render(
+      <ReguideProvider steps={steps} initialOpen>
+        <Controls />
+        <IndexControls />
+        <Targets steps={steps} />
+      </ReguideProvider>,
+    )
+
+    await user.click(screen.getByRole('button', { name: 'Go to high index' }))
+    expect(screen.getByTestId('index')).toHaveTextContent('2')
+    expect(screen.getByText('Finish')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Go to low index' }))
+    expect(screen.getByTestId('index')).toHaveTextContent('0')
+    expect(screen.getByText('Intro')).toBeInTheDocument()
+  })
+
+  it('throws when useReguide is used outside the provider', () => {
+    function RogueConsumer() {
+      useReguide()
+      return null
+    }
+
+    expect(() => render(<RogueConsumer />)).toThrow(
+      'useReguide must be used within a ReguideProvider',
+    )
   })
 
   it('fires analytics callbacks for start, stop, and step changes', async () => {
@@ -581,5 +1070,155 @@ describe('ReguideProvider', () => {
     )
 
     expect(screen.getByTestId('index')).toHaveTextContent('1')
+  })
+
+  it('restores progress by persisted stepIndex when stepId is missing', () => {
+    window.localStorage.setItem(
+      'reguide:test-progress-index-only',
+      JSON.stringify({
+        stepIndex: 1,
+      }),
+    )
+
+    const steps: ReguideStep[] = [
+      {
+        id: 'first',
+        targetRef: createRef<HTMLElement>(),
+        title: 'First',
+        body: 'One',
+      },
+      {
+        id: 'second',
+        targetRef: createRef<HTMLElement>(),
+        title: 'Second',
+        body: 'Two',
+      },
+    ]
+
+    render(
+      <ReguideProvider
+        steps={steps}
+        persistence={{ key: 'reguide:test-progress-index-only' }}
+      >
+        <Controls />
+        <Targets steps={steps} />
+      </ReguideProvider>,
+    )
+
+    expect(screen.getByTestId('index')).toHaveTextContent('1')
+  })
+
+  it('restores open state when persisted isOpen is true', () => {
+    window.localStorage.setItem(
+      'reguide:test-open-state',
+      JSON.stringify({
+        stepId: 'first',
+        isOpen: true,
+      }),
+    )
+
+    const steps: ReguideStep[] = [
+      {
+        id: 'first',
+        targetRef: createRef<HTMLElement>(),
+        title: 'First',
+        body: 'One',
+      },
+    ]
+
+    render(
+      <ReguideProvider steps={steps} persistence={{ key: 'reguide:test-open-state' }}>
+        <Controls />
+        <Targets steps={steps} />
+      </ReguideProvider>,
+    )
+
+    expect(screen.getByRole('dialog', { name: 'First' })).toBeInTheDocument()
+  })
+
+  it('ignores malformed persistence payloads', () => {
+    window.localStorage.setItem('reguide:test-malformed', '{invalid json')
+
+    const steps: ReguideStep[] = [
+      {
+        id: 'first',
+        targetRef: createRef<HTMLElement>(),
+        title: 'First',
+        body: 'One',
+      },
+    ]
+
+    expect(() => {
+      render(
+        <ReguideProvider steps={steps} persistence={{ key: 'reguide:test-malformed' }}>
+          <Controls />
+          <Targets steps={steps} />
+        </ReguideProvider>,
+      )
+    }).not.toThrow()
+
+    expect(screen.getByTestId('index')).toHaveTextContent('0')
+  })
+
+  it('ignores persistence write errors', () => {
+    const setItem = vi.fn(() => {
+      throw new Error('Storage unavailable')
+    })
+
+    const storage = {
+      getItem: vi.fn(() => null),
+      setItem,
+      removeItem: vi.fn(),
+      clear: vi.fn(),
+      key: vi.fn(() => null),
+      length: 0,
+    } as unknown as Storage
+
+    const steps: ReguideStep[] = [
+      {
+        id: 'first',
+        targetRef: createRef<HTMLElement>(),
+        title: 'First',
+        body: 'One',
+      },
+    ]
+
+    expect(() => {
+      render(
+        <ReguideProvider steps={steps} persistence={{ key: 'reguide:test-write-fail', storage }}>
+          <Targets steps={steps} />
+        </ReguideProvider>,
+      )
+    }).not.toThrow()
+
+    expect(setItem).toHaveBeenCalled()
+  })
+
+  it('skips persistence restore and write when localStorage is unavailable', () => {
+    const localStorageSpy = vi
+      .spyOn(window, 'localStorage', 'get')
+      .mockReturnValue(null as unknown as Storage)
+
+    const steps: ReguideStep[] = [
+      {
+        id: 'first',
+        targetRef: createRef<HTMLElement>(),
+        title: 'First',
+        body: 'One',
+      },
+    ]
+
+    expect(() => {
+      render(
+        <ReguideProvider steps={steps} persistence={{ key: 'reguide:test-no-storage' }}>
+          <Controls />
+          <Targets steps={steps} />
+        </ReguideProvider>,
+      )
+    }).not.toThrow()
+
+    expect(screen.getByTestId('index')).toHaveTextContent('0')
+
+    localStorageSpy.mockRestore()
   })
 })
