@@ -1,4 +1,4 @@
-import { createRef, type RefObject } from 'react'
+import { createRef, useState, type RefObject } from 'react'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { vi } from 'vitest'
@@ -23,6 +23,44 @@ function Controls() {
         Start
       </button>
       <span data-testid="index">{guide.currentStepIndex}</span>
+    </div>
+  )
+}
+
+function AsyncControls() {
+  const guide = useReguide()
+  const [status, setStatus] = useState('idle')
+
+  return (
+    <div>
+      <button
+        type="button"
+        onClick={async () => {
+          await guide.start()
+          setStatus('started')
+        }}
+      >
+        Await start
+      </button>
+      <button
+        type="button"
+        onClick={async () => {
+          await guide.next()
+          setStatus('advanced')
+        }}
+      >
+        Await next
+      </button>
+      <button
+        type="button"
+        onClick={async () => {
+          await guide.stop()
+          setStatus('stopped')
+        }}
+      >
+        Await stop
+      </button>
+      <span data-testid="async-status">{status}</span>
     </div>
   )
 }
@@ -1036,6 +1074,88 @@ describe('ReguideProvider', () => {
         currentStepId: 'second',
       }),
     )
+  })
+
+  it('awaits async lifecycle callbacks before resolving guide actions', async () => {
+    const user = userEvent.setup()
+
+    let resolveStart: (() => void) | undefined
+    let resolveStepChange: (() => void) | undefined
+    let resolveStop: (() => void) | undefined
+
+    const onStart = vi.fn(() => new Promise<void>((resolve) => {
+      resolveStart = resolve
+    }))
+    const onStepChange = vi.fn(() => new Promise<void>((resolve) => {
+      resolveStepChange = resolve
+    }))
+    const onStop = vi.fn(() => new Promise<void>((resolve) => {
+      resolveStop = resolve
+    }))
+
+    const steps: ReguideStep[] = [
+      {
+        id: 'first',
+        targetRef: createRef<HTMLElement>(),
+        title: 'First',
+        body: 'One',
+      },
+      {
+        id: 'second',
+        targetRef: createRef<HTMLElement>(),
+        title: 'Second',
+        body: 'Two',
+      },
+    ]
+
+    render(
+      <ReguideProvider
+        steps={steps}
+        onStart={onStart}
+        onStop={onStop}
+        onStepChange={onStepChange}
+      >
+        <AsyncControls />
+        <Targets steps={steps} />
+      </ReguideProvider>,
+    )
+
+    await user.click(screen.getByRole('button', { name: 'Await start' }))
+    expect(onStart).toHaveBeenCalledTimes(1)
+    expect(screen.getByTestId('async-status')).toHaveTextContent('idle')
+
+    resolveStart?.()
+    await waitFor(() => {
+      expect(screen.getByTestId('async-status')).toHaveTextContent('started')
+    })
+
+    await user.click(screen.getByRole('button', { name: 'Await next' }))
+    expect(onStepChange).toHaveBeenCalledWith(
+      expect.objectContaining({
+        source: 'next',
+        previousStepId: 'first',
+        currentStepId: 'second',
+      }),
+    )
+    expect(screen.getByTestId('async-status')).toHaveTextContent('started')
+
+    resolveStepChange?.()
+    await waitFor(() => {
+      expect(screen.getByTestId('async-status')).toHaveTextContent('advanced')
+    })
+
+    await user.click(screen.getByRole('button', { name: 'Await stop' }))
+    expect(onStop).toHaveBeenCalledWith(
+      expect.objectContaining({
+        currentStepId: 'second',
+      }),
+    )
+    expect(screen.getByTestId('async-status')).toHaveTextContent('advanced')
+
+    resolveStop?.()
+    await waitFor(() => {
+      expect(screen.getByTestId('async-status')).toHaveTextContent('stopped')
+    })
   })
 
   it('restores progress by step id with persistence key', () => {

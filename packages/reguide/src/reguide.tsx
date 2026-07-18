@@ -319,11 +319,10 @@ export function ReguideProvider({
   const [customValidationSatisfied, setCustomValidationSatisfied] = useState(false)
   const dialogRef = useRef<HTMLDivElement | null>(null)
   const lastFocusedRef = useRef<HTMLElement | null>(null)
+  const actionQueueRef = useRef<Promise<void>>(Promise.resolve())
   const validationRunIdRef = useRef(0)
-  const stepChangeSourceRef = useRef<ReguideStepChangeSource>('start')
-  const previousStepIndexRef = useRef(0)
-  const hasMountedRef = useRef(false)
   const hasRestoredRef = useRef(false)
+  const currentStepIndexRef = useRef(0)
 
   const currentStep = steps[currentStepIndex] ?? null
   const stepMode = getStepMode(currentStep)
@@ -379,6 +378,69 @@ export function ReguideProvider({
     currentStep?.theme?.card?.className,
   )
 
+  const enqueueAction = useCallback((action: () => Promise<void>) => {
+    const run = actionQueueRef.current
+      .catch(() => undefined)
+      .then(action)
+    actionQueueRef.current = run
+    return run
+  }, [])
+
+  const setCurrentStepIndexState = useCallback((nextIndex: number) => {
+    currentStepIndexRef.current = nextIndex
+    setCurrentStepIndex(nextIndex)
+  }, [])
+
+  const invokeStart = useCallback(async () => {
+    try {
+      await onStart?.()
+    } catch {
+      // Ignore consumer callback failures.
+    }
+  }, [onStart])
+
+  const invokeStop = useCallback(async (stepIndex: number) => {
+    try {
+      await onStop?.({
+        currentStepIndex: stepIndex,
+        currentStepId: steps[stepIndex]?.id,
+      })
+    } catch {
+      // Ignore consumer callback failures.
+    }
+  }, [onStop, steps])
+
+  const invokeStepChange = useCallback(async (
+    nextStepIndex: number,
+    source: ReguideStepChangeSource,
+    previousStepIndex: number,
+  ) => {
+    if (nextStepIndex === previousStepIndex) {
+      return
+    }
+
+    try {
+      await onStepChange?.({
+        source,
+        currentStepIndex: nextStepIndex,
+        currentStepId: steps[nextStepIndex]?.id,
+        previousStepIndex,
+        previousStepId: steps[previousStepIndex]?.id,
+      })
+    } catch {
+      // Ignore consumer callback failures.
+    }
+  }, [onStepChange, steps])
+
+  const transitionToStep = useCallback(async (
+    nextStepIndex: number,
+    source: ReguideStepChangeSource,
+  ) => {
+    const previousStepIndex = currentStepIndexRef.current
+    setCurrentStepIndexState(nextStepIndex)
+    await invokeStepChange(nextStepIndex, source, previousStepIndex)
+  }, [invokeStepChange, setCurrentStepIndexState])
+
   const recalcTargetRect = useCallback(() => {
     setTargetRect(getTargetRect(currentStep?.targetRef?.current ?? null, highlightPadding))
   }, [currentStep, highlightPadding])
@@ -432,8 +494,10 @@ export function ReguideProvider({
       const resolvedIndex = stepIndexFromId ?? parsed.stepIndex
 
       if (typeof resolvedIndex === 'number') {
-        stepChangeSourceRef.current = 'restore'
-        setCurrentStepIndex(Math.max(0, Math.min(resolvedIndex, steps.length - 1)))
+        const safeIndex = Math.max(0, Math.min(resolvedIndex, steps.length - 1))
+        const previousStepIndex = currentStepIndexRef.current
+        setCurrentStepIndexState(safeIndex)
+        void invokeStepChange(safeIndex, 'restore', previousStepIndex)
       }
 
       if ((persistence.persistIsOpen ?? true) && typeof parsed.isOpen === 'boolean') {
@@ -442,7 +506,7 @@ export function ReguideProvider({
     } catch {
       // Ignore malformed persistence data.
     }
-  }, [persistence, stepIndexById, steps.length])
+  }, [invokeStepChange, persistence, setCurrentStepIndexState, stepIndexById, steps.length])
 
   useEffect(() => {
     if (!persistence) {
@@ -470,28 +534,6 @@ export function ReguideProvider({
       // Ignore storage write failures.
     }
   }, [currentStepIndex, isOpen, persistence, steps])
-
-  useEffect(() => {
-    if (!hasMountedRef.current) {
-      hasMountedRef.current = true
-      previousStepIndexRef.current = currentStepIndex
-      return
-    }
-
-    const previousStepIndex = previousStepIndexRef.current
-    const previousStep = steps[previousStepIndex]
-    const nextStep = steps[currentStepIndex]
-
-    onStepChange?.({
-      source: stepChangeSourceRef.current,
-      currentStepIndex,
-      currentStepId: nextStep?.id,
-      previousStepIndex,
-      previousStepId: previousStep?.id,
-    })
-
-    previousStepIndexRef.current = currentStepIndex
-  }, [currentStepIndex, onStepChange, steps])
 
   useEffect(() => {
     if (!isOpen || !currentStep?.autoFocus) {
@@ -537,8 +579,10 @@ export function ReguideProvider({
         setCustomValidationSatisfied(passed)
 
         if (passed && currentStep.progressOnValidate) {
-          stepChangeSourceRef.current = 'custom-auto'
-          setCurrentStepIndex((prev) => Math.min(prev + 1, steps.length - 1))
+          const nextStepIndex = Math.min(currentStepIndexRef.current + 1, steps.length - 1)
+          void enqueueAction(async () => {
+            await transitionToStep(nextStepIndex, 'custom-auto')
+          })
         }
       } catch {
         if (runId !== validationRunIdRef.current) {
@@ -551,8 +595,10 @@ export function ReguideProvider({
 
     const onClick = (event: Event) => {
       if (stepMode === 'click') {
-        stepChangeSourceRef.current = 'click'
-        setCurrentStepIndex((prev) => Math.min(prev + 1, steps.length - 1))
+        const nextStepIndex = Math.min(currentStepIndexRef.current + 1, steps.length - 1)
+        void enqueueAction(async () => {
+          await transitionToStep(nextStepIndex, 'click')
+        })
       }
 
       if (stepMode === 'interact') {
@@ -593,7 +639,7 @@ export function ReguideProvider({
       target.removeEventListener('input', onInput)
       target.removeEventListener('keydown', onKeyDown)
     }
-  }, [currentStep, isOpen, stepMode, steps.length])
+  }, [currentStep, enqueueAction, isOpen, stepMode, steps.length, transitionToStep])
 
   useEffect(() => {
     if (!isOpen) {
@@ -635,56 +681,50 @@ export function ReguideProvider({
     }
   }, [isOpen])
 
-  const start = useCallback(() => {
+  const start = useCallback(() => enqueueAction(async () => {
+    const previousStepIndex = currentStepIndexRef.current
     lastFocusedRef.current = document.activeElement as HTMLElement | null
-    stepChangeSourceRef.current = 'start'
-    setCurrentStepIndex(0)
+    setCurrentStepIndexState(0)
     setIsOpen(true)
-    onStart?.()
-  }, [onStart])
+    await invokeStart()
+    await invokeStepChange(0, 'start', previousStepIndex)
+  }), [enqueueAction, invokeStart, invokeStepChange, setCurrentStepIndexState])
 
-  const stop = useCallback(() => {
+  const stop = useCallback(() => enqueueAction(async () => {
+    const activeStepIndex = currentStepIndexRef.current
     setIsOpen(false)
     lastFocusedRef.current?.focus()
-    onStop?.({
-      currentStepIndex,
-      currentStepId: steps[currentStepIndex]?.id,
-    })
-  }, [currentStepIndex, onStop, steps])
+    await invokeStop(activeStepIndex)
+  }), [enqueueAction, invokeStop])
 
-  const next = useCallback(() => {
-    stepChangeSourceRef.current = 'next'
-    setCurrentStepIndex((prev) => {
-      const nextIndex = Math.min(prev + 1, steps.length - 1)
-      return nextIndex
-    })
-  }, [steps.length])
+  const next = useCallback(() => enqueueAction(async () => {
+    const nextStepIndex = Math.min(currentStepIndexRef.current + 1, steps.length - 1)
+    await transitionToStep(nextStepIndex, 'next')
+  }), [enqueueAction, steps.length, transitionToStep])
 
-  const prev = useCallback(() => {
-    stepChangeSourceRef.current = 'prev'
-    setCurrentStepIndex((prev) => Math.max(prev - 1, 0))
-  }, [])
+  const prev = useCallback(() => enqueueAction(async () => {
+    const previousStepIndex = Math.max(currentStepIndexRef.current - 1, 0)
+    await transitionToStep(previousStepIndex, 'prev')
+  }), [enqueueAction, transitionToStep])
 
   const goToStep = useCallback(
-    (index: number) => {
+    (index: number) => enqueueAction(async () => {
       const safeIndex = Math.max(0, Math.min(index, steps.length - 1))
-      stepChangeSourceRef.current = 'goToStep'
-      setCurrentStepIndex(safeIndex)
-    },
-    [steps.length],
+      await transitionToStep(safeIndex, 'goToStep')
+    }),
+    [enqueueAction, steps.length, transitionToStep],
   )
 
   const goToStepById = useCallback(
-    (id: string) => {
+    (id: string) => enqueueAction(async () => {
       const stepIndex = stepIndexById.get(id)
       if (typeof stepIndex !== 'number') {
         return
       }
 
-      stepChangeSourceRef.current = 'goToStepById'
-      setCurrentStepIndex(stepIndex)
-    },
-    [stepIndexById],
+      await transitionToStep(stepIndex, 'goToStepById')
+    }),
+    [enqueueAction, stepIndexById, transitionToStep],
   )
 
   const canGoPrev = currentStepIndex > 0

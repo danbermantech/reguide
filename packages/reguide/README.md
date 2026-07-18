@@ -113,9 +113,9 @@ Props:
 - `initialOpen?: boolean` (default: `false`)
 - `theme?: ReguideTheme` (global visual defaults)
 - `persistence?: { key: string; storage?: Storage; persistIsOpen?: boolean }`
-- `onStart?: () => void`
-- `onStop?: (event) => void`
-- `onStepChange?: (event) => void`
+- `onStart?: () => void | Promise<void>`
+- `onStop?: (event) => void | Promise<void>`
+- `onStepChange?: (event) => void | Promise<void>`
 
 ### `useReguide`
 

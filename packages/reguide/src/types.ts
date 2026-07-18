@@ -95,6 +95,8 @@ export interface ReguidePersistenceOptions {
   persistIsOpen?: boolean
 }
 
+export type ReguideLifecycleCallbackResult = void | Promise<void>
+
 interface ReguideStepBase {
   id?: string
   targetRef?: RefObject<HTMLElement | null>
@@ -121,9 +123,9 @@ export interface ReguideProviderProps extends PropsWithChildren {
   initialOpen?: boolean
   theme?: ReguideTheme
   persistence?: ReguidePersistenceOptions
-  onStart?: () => void
-  onStop?: (event: ReguideStopEvent) => void
-  onStepChange?: (event: ReguideStepChangeEvent) => void
+  onStart?: () => ReguideLifecycleCallbackResult
+  onStop?: (event: ReguideStopEvent) => ReguideLifecycleCallbackResult
+  onStepChange?: (event: ReguideStepChangeEvent) => ReguideLifecycleCallbackResult
 }
 
 export interface ReguideContextValue {
@@ -134,10 +136,10 @@ export interface ReguideContextValue {
   interactionSatisfied: boolean
   canGoNext: boolean
   canGoPrev: boolean
-  start: () => void
-  stop: () => void
-  next: () => void
-  prev: () => void
-  goToStep: (index: number) => void
-  goToStepById: (id: string) => void
+  start: () => Promise<void>
+  stop: () => Promise<void>
+  next: () => Promise<void>
+  prev: () => Promise<void>
+  goToStep: (index: number) => Promise<void>
+  goToStepById: (id: string) => Promise<void>
 }
