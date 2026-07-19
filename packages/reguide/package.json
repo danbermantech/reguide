@@ -1,6 +1,6 @@
 {
   "name": "reguide",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "type": "module",
   "main": "dist/reguide.umd.cjs",
   "module": "dist/reguide.js",
