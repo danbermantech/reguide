@@ -116,6 +116,34 @@ function Targets({ steps }: { steps: ReguideStep[] }) {
   )
 }
 
+function DelayedMountTargets({ steps }: { steps: ReguideStep[] }) {
+  const [showSecondTarget, setShowSecondTarget] = useState(false)
+  const firstTargetRef = steps[0]?.targetRef as RefObject<HTMLButtonElement | null> | undefined
+  const secondTargetRef = steps[1]?.targetRef as RefObject<HTMLButtonElement | null> | undefined
+
+  return (
+    <div>
+      <button
+        ref={firstTargetRef}
+        onClick={() => {
+          window.setTimeout(() => {
+            setShowSecondTarget(true)
+          }, 0)
+        }}
+      >
+        Reveal next target
+      </button>
+      {showSecondTarget
+        ? (
+            <button ref={secondTargetRef}>
+              Mounted target
+            </button>
+          )
+        : null}
+    </div>
+  )
+}
+
 describe('ReguideProvider', () => {
   it('advances automatically on click mode', async () => {
     const user = userEvent.setup()
@@ -140,6 +168,38 @@ describe('ReguideProvider', () => {
     await user.click(screen.getByRole('button', { name: 'Target 1' }))
 
     expect(screen.getByText('Second step')).toBeInTheDocument()
+  })
+
+  it('resolves a next-step target that mounts after a click-mode transition', async () => {
+    const user = userEvent.setup()
+    const steps: ReguideStep[] = [
+      {
+        targetRef: createRef<HTMLElement>(),
+        title: 'Click target',
+        body: 'Click to continue',
+        mode: 'click',
+      },
+      {
+        targetRef: createRef<HTMLElement>(),
+        title: 'Mounted later',
+        body: 'Wait for the next target to mount.',
+      },
+    ]
+
+    render(
+      <ReguideProvider steps={steps} initialOpen>
+        <DelayedMountTargets steps={steps} />
+      </ReguideProvider>,
+    )
+
+    await user.click(screen.getByRole('button', { name: 'Reveal next target' }))
+
+    await waitFor(() => {
+      expect(screen.getByText('Mounted later')).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Mounted target' })).toBeInTheDocument()
+      expect(document.querySelector('.reguide-cutout')).toBeInTheDocument()
+      expect(document.querySelector('.reguide-backdrop')).not.toBeInTheDocument()
+    })
   })
 
   it('keeps next disabled until interact event happens', async () => {

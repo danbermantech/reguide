@@ -30,9 +30,11 @@ const CardBodyExampleComponent = ({ text }: { text: string }) => {
 
 export default function App() {
   const profileRef = useRef<HTMLButtonElement | null>(null);
+  const delayedMountRef = useRef<HTMLButtonElement | null>(null);
   const searchRef = useRef<HTMLTextAreaElement | null>(null);
   const publishRef = useRef<HTMLButtonElement | null>(null);
   const didPublishRef = useRef(false);
+  const [showDelayedTarget, setShowDelayedTarget] = useState(false);
 
   const guideTheme = useMemo<ReguideTheme>(
     () => ({
@@ -80,7 +82,7 @@ export default function App() {
         id: "profile",
         targetRef: profileRef,
         title: "Click-gated progression",
-        body: "This step uses click mode, so Next unlocks only after the highlighted button is clicked.",
+        body: "This step uses click mode. Clicking the highlighted button advances immediately and starts mounting the next target.",
         mode: "click",
         theme: {
           stepCount: {
@@ -110,6 +112,31 @@ export default function App() {
               border: "1px solid #1e40af",
               color: "#ffffff",
               fontFamily: "Courier New",
+              fontWeight: 700,
+            },
+          },
+        },
+      },
+      {
+        id: "delayed-mount",
+        targetRef: delayedMountRef,
+        title: "Delayed target resolution",
+        body: "This button mounts shortly after the previous click. The guide now keeps resolving the ref until the target appears.",
+        autoFocus: true,
+        theme: {
+          backdrop: {
+            color: "#102a43",
+          },
+          buttons: {
+            primary: {
+              background: "#0f766e",
+              border: "1px solid #115e59",
+              color: "#f0fdfa",
+              fontFamily: "Georgia, serif",
+              fontWeight: 700,
+            },
+            secondary: {
+              fontFamily: "Georgia, serif",
               fontWeight: 700,
             },
           },
@@ -248,10 +275,31 @@ export default function App() {
       <main className="page">
         <header className="topbar">
           <h1>reguide demo</h1>
-          <button ref={profileRef} type="button">
+          <button
+            ref={profileRef}
+            type="button"
+            onClick={() => {
+              window.setTimeout(() => {
+                setShowDelayedTarget(true);
+              }, 180);
+            }}
+          >
             Open profile
           </button>
         </header>
+
+        {showDelayedTarget && (
+          <section className="panel panel-accent">
+            <h2>Mounted after the click step</h2>
+            <p>
+              This target is rendered after the profile click, which exercises
+              delayed ref resolution for the next tour step.
+            </p>
+            <button ref={delayedMountRef} type="button">
+              Newly mounted target
+            </button>
+          </section>
+        )}
 
         <section className="panel">
           <label htmlFor="search">Draft a post</label>

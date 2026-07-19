@@ -128,6 +128,21 @@ interface PersistedReguideState {
   isOpen?: boolean
 }
 
+function isSameTargetRect(nextRect: TargetRect | null, previousRect: TargetRect | null): boolean {
+  if (nextRect === previousRect) {
+    return true
+  }
+
+  if (!nextRect || !previousRect) {
+    return false
+  }
+
+  return nextRect.left === previousRect.left
+    && nextRect.top === previousRect.top
+    && nextRect.width === previousRect.width
+    && nextRect.height === previousRect.height
+}
+
 function toSize(value: number | string): string {
   return typeof value === 'number' ? `${value}px` : value
 }
@@ -319,6 +334,7 @@ export function ReguideProvider({
   const [customValidationSatisfied, setCustomValidationSatisfied] = useState(false)
   const dialogRef = useRef<HTMLDivElement | null>(null)
   const lastFocusedRef = useRef<HTMLElement | null>(null)
+  const autoFocusedStepKeyRef = useRef<string | null>(null)
   const actionQueueRef = useRef<Promise<void>>(Promise.resolve())
   const validationRunIdRef = useRef(0)
   const hasRestoredRef = useRef(false)
@@ -386,10 +402,31 @@ export function ReguideProvider({
     return run
   }, [])
 
-  const setCurrentStepIndexState = useCallback((nextIndex: number) => {
-    currentStepIndexRef.current = nextIndex
-    setCurrentStepIndex(nextIndex)
+  const updateTargetRect = useCallback((nextTargetRect: TargetRect | null) => {
+    setTargetRect((previousTargetRect) => {
+      if (isSameTargetRect(nextTargetRect, previousTargetRect)) {
+        return previousTargetRect
+      }
+
+      return nextTargetRect
+    })
   }, [])
+
+  const setCurrentStepIndexState = useCallback((nextIndex: number) => {
+    const nextStep = steps[nextIndex]
+    const nextTheme = resolveTheme(theme, nextStep?.theme)
+    const nextHighlightPadding = Math.max(0, nextTheme.highlight.padding)
+    const nextTargetRect = getTargetRect(nextStep?.targetRef?.current ?? null, nextHighlightPadding)
+    const nextStepMode = getStepMode(nextStep ?? null)
+    const nextStepHasTargetRef = Boolean(nextStep?.targetRef)
+
+    currentStepIndexRef.current = nextIndex
+    updateTargetRect(nextTargetRect)
+    setInteractionSatisfied(nextStepMode !== 'interact' || !nextStepHasTargetRef)
+    setCustomValidationSatisfied(nextStepMode !== 'custom' || !nextStepHasTargetRef)
+    validationRunIdRef.current += 1
+    setCurrentStepIndex(nextIndex)
+  }, [steps, theme, updateTargetRect])
 
   const invokeStart = useCallback(async () => {
     try {
@@ -441,29 +478,70 @@ export function ReguideProvider({
     await invokeStepChange(nextStepIndex, source, previousStepIndex)
   }, [invokeStepChange, setCurrentStepIndexState])
 
-  const recalcTargetRect = useCallback(() => {
-    setTargetRect(getTargetRect(currentStep?.targetRef?.current ?? null, highlightPadding))
-  }, [currentStep, highlightPadding])
+  const resolveTargetRect = useCallback(() => {
+    if (!currentStep?.targetRef) {
+      updateTargetRect(null)
+      return true
+    }
+
+    const nextTargetRect = getTargetRect(currentStep.targetRef.current ?? null, highlightPadding)
+    updateTargetRect(nextTargetRect)
+    return Boolean(nextTargetRect)
+  }, [currentStep, highlightPadding, updateTargetRect])
 
   useEffect(() => {
     if (!isOpen) {
+      updateTargetRect(null)
       return
     }
 
-    recalcTargetRect()
+    let frameId = 0
+    let remainingAnimationFrames = 10
+    let observer: MutationObserver | null = null
+
+    const tryResolve = () => {
+      const resolved = resolveTargetRect()
+      if (!resolved && currentStep?.targetRef && remainingAnimationFrames > 0) {
+        remainingAnimationFrames -= 1
+        frameId = window.requestAnimationFrame(tryResolve)
+      }
+
+      return resolved
+    }
 
     const onWindowChange = () => {
-      recalcTargetRect()
+      void tryResolve()
+    }
+
+    const resolvedImmediately = tryResolve()
+
+    if (!resolvedImmediately && currentStep?.targetRef && typeof MutationObserver !== 'undefined') {
+      observer = new MutationObserver(() => {
+        if (tryResolve()) {
+          observer?.disconnect()
+          observer = null
+        }
+      })
+
+      observer.observe(document.body, {
+        childList: true,
+        subtree: true,
+      })
     }
 
     window.addEventListener('resize', onWindowChange)
     window.addEventListener('scroll', onWindowChange, true)
 
     return () => {
+      if (frameId) {
+        window.cancelAnimationFrame(frameId)
+      }
+
+      observer?.disconnect()
       window.removeEventListener('resize', onWindowChange)
       window.removeEventListener('scroll', onWindowChange, true)
     }
-  }, [isOpen, recalcTargetRect])
+  }, [currentStep, isOpen, resolveTargetRect, updateTargetRect])
 
   useEffect(() => {
     const hasTargetRef = Boolean(currentStep?.targetRef)
@@ -540,8 +618,15 @@ export function ReguideProvider({
       return
     }
 
-    currentStep.targetRef?.current?.focus()
-  }, [isOpen, currentStep])
+    const focusTarget = currentStep.targetRef?.current
+    const stepKey = `${currentStepIndex}:${currentStep.id ?? ''}`
+    if (!focusTarget || autoFocusedStepKeyRef.current === stepKey) {
+      return
+    }
+
+    focusTarget.focus()
+    autoFocusedStepKeyRef.current = stepKey
+  }, [currentStep, currentStepIndex, isOpen, targetRect])
 
   useEffect(() => {
     if (!isOpen) {

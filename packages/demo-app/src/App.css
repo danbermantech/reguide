@@ -43,6 +43,16 @@ body {
   }
 }
 
+.panel-accent {
+  border-color: #67e8f9;
+  background: linear-gradient(135deg, #ecfeff 0%, #f8fafc 100%);
+}
+
+.panel-accent h2,
+.panel-accent p {
+  margin-top: 0;
+}
+
 .panel input,
 .panel textarea {
   margin-top: 8px;
