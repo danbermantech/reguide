@@ -2,6 +2,7 @@ export { ReguideProvider, useReguide } from './reguide'
 export type {
 	ReguideBackdropTheme,
 	ReguideButtonTheme,
+	ReguideButtonText,
 	ReguideButtonsTheme,
 	ReguideCardTheme,
 	ReguideStepChangeEvent,

@@ -5,18 +5,12 @@ Lightweight guided onboarding for React apps.
 `reguide` provides:
 
 - A spotlight overlay around the active target element
-- A floating step card with Back / Next / Close controls
+- A floating step card with Back / Next / Skip / Close controls
 - Step gating modes (`default`, `click`, `interact`, `custom`)
 - Optional per-step autofocus behavior
 - A small API surface centered around `ReguideProvider` and `useReguide`
 
 ## Installation
-
-### In a pnpm workspace
-
-```bash
-pnpm add reguide@workspace:* react react-dom
-```
 
 ### As a package dependency
 
@@ -112,6 +106,7 @@ Props:
 - `steps: ReguideStep[]` (required)
 - `initialOpen?: boolean` (default: `false`)
 - `theme?: ReguideTheme` (global visual defaults)
+- `buttonText?: { back?: string; next?: string; skip?: string; close?: string }`
 - `persistence?: { key: string; storage?: Storage; persistIsOpen?: boolean }`
 - `onStart?: () => void | Promise<void>`
 - `onStop?: (event) => void | Promise<void>`
@@ -148,12 +143,20 @@ interface ReguideStep {
   mode?: ReguideStepMode
   autoFocus?: boolean
   theme?: ReguideTheme
+  buttonText?: {
+    back?: string
+    next?: string
+    skip?: string
+    close?: string
+  }
 }
 ```
 
 `body` accepts plain text or any React component.
 
 When `targetRef` is omitted, the step renders without a spotlight cutout and centers the card on the page.
+
+`skip` controls the early-exit button shown before the final step, while `close` controls the final action button shown on the last step.
 
 ### `goToStepById`
 

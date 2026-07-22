@@ -163,7 +163,7 @@ describe('ReguideProvider', () => {
 
     render(<TestHarness steps={steps} />)
 
-    expect(screen.queryByRole('button', { name: 'Next' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Next' })).toBeDisabled()
 
     await user.click(screen.getByRole('button', { name: 'Target 1' }))
 
@@ -279,6 +279,9 @@ describe('ReguideProvider', () => {
 
     render(<TestHarness steps={steps} />)
 
+    expect(screen.getByRole('button', { name: 'Skip' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Close' })).not.toBeInTheDocument()
+
     await user.click(screen.getByRole('button', { name: 'Next' }))
 
     expect(screen.queryByRole('button', { name: 'Next' })).not.toBeInTheDocument()
@@ -341,7 +344,7 @@ describe('ReguideProvider', () => {
 
     render(<TestHarness steps={steps} />)
 
-    const closeSecondary = screen.getByRole('button', { name: 'Close' })
+    const closeSecondary = screen.getByRole('button', { name: 'Skip' })
     const next = screen.getByRole('button', { name: 'Next' })
 
     closeSecondary.focus()
@@ -351,6 +354,110 @@ describe('ReguideProvider', () => {
     next.focus()
     fireEvent.keyDown(document, { key: 'Tab' })
     expect(closeSecondary).toHaveFocus()
+  })
+
+  it('supports global button text customization', async () => {
+    const user = userEvent.setup()
+    const steps: ReguideStep[] = [
+      {
+        targetRef: createRef<HTMLElement>(),
+        title: 'First',
+        body: 'Step one',
+      },
+      {
+        targetRef: createRef<HTMLElement>(),
+        title: 'Last',
+        body: 'Step two',
+      },
+    ]
+
+    render(
+      <ReguideProvider
+        steps={steps}
+        initialOpen
+        buttonText={{
+          back: 'Previous',
+          next: 'Continue',
+          skip: 'Dismiss tour',
+          close: 'Done',
+        }}
+      >
+        <Targets steps={steps} />
+      </ReguideProvider>,
+    )
+
+    expect(screen.getByRole('button', { name: 'Dismiss tour' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Previous' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Continue' })).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Continue' }))
+
+    expect(screen.getByRole('button', { name: 'Done' })).toBeInTheDocument()
+  })
+
+  it('supports per-step button text customization over global text', async () => {
+    const user = userEvent.setup()
+    const steps: ReguideStep[] = [
+      {
+        targetRef: createRef<HTMLElement>(),
+        title: 'First',
+        body: 'Step one',
+        buttonText: {
+          skip: 'Skip intro',
+        },
+      },
+      {
+        targetRef: createRef<HTMLElement>(),
+        title: 'Last',
+        body: 'Step two',
+        buttonText: {
+          close: 'Finish tour',
+        },
+      },
+    ]
+
+    render(
+      <ReguideProvider
+        steps={steps}
+        initialOpen
+        buttonText={{
+          skip: 'Dismiss',
+          close: 'Done',
+        }}
+      >
+        <Targets steps={steps} />
+      </ReguideProvider>,
+    )
+
+    expect(screen.getByRole('button', { name: 'Skip intro' })).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Next' }))
+
+    expect(screen.getByRole('button', { name: 'Finish tour' })).toBeInTheDocument()
+  })
+
+  it('renders skip on the left and navigation actions on the right', () => {
+    const steps: ReguideStep[] = [
+      {
+        targetRef: createRef<HTMLElement>(),
+        title: 'First',
+        body: 'Step one',
+      },
+      {
+        targetRef: createRef<HTMLElement>(),
+        title: 'Second',
+        body: 'Step two',
+      },
+    ]
+
+    render(<TestHarness steps={steps} />)
+
+    const leftActions = document.querySelector('.reguide-actions-left')
+    const rightActions = document.querySelector('.reguide-actions-right')
+
+    expect(leftActions).toContainElement(screen.getByRole('button', { name: 'Skip' }))
+    expect(rightActions).toContainElement(screen.getByRole('button', { name: 'Back' }))
+    expect(rightActions).toContainElement(screen.getByRole('button', { name: 'Next' }))
   })
 
   it('returns early on Tab when no focusable elements are found', () => {
@@ -832,7 +939,7 @@ describe('ReguideProvider', () => {
     render(<TestHarness steps={steps} />)
 
     await user.click(screen.getByRole('button', { name: 'Next' }))
-    expect(screen.queryByRole('button', { name: 'Next' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Next' })).toBeDisabled()
 
     await user.type(screen.getByLabelText('Target 2'), 'unlock')
 

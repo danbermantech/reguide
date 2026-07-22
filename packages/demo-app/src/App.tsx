@@ -14,23 +14,17 @@ function TourLauncher() {
       <button type="button" onClick={guide.start}>
         Start feature tour
       </button>
-      <button type="button" onClick={() => guide.goToStepById("publish")}>
-        Skip to validation step
-      </button>
-      <button type="button" onClick={guide.stop}>
-        Close tour
-      </button>
     </div>
   );
 }
 
 const CardBodyExampleComponent = ({ text }: { text: string }) => {
-  return <div style={{ border: "1px dashed red" }}>{text}</div>;
+  return <div className="card-body-example">{text}</div>;
 };
 
 export default function App() {
   const profileRef = useRef<HTMLButtonElement | null>(null);
-  const delayedMountRef = useRef<HTMLButtonElement | null>(null);
+  const delayedMountRef = useRef<HTMLDivElement | null>(null);
   const searchRef = useRef<HTMLTextAreaElement | null>(null);
   const publishRef = useRef<HTMLButtonElement | null>(null);
   const didPublishRef = useRef(false);
@@ -121,7 +115,7 @@ export default function App() {
         id: "delayed-mount",
         targetRef: delayedMountRef,
         title: "Delayed target resolution",
-        body: "This button mounts shortly after the previous click. The guide now keeps resolving the ref until the target appears.",
+        body: "This card mounts shortly after the previous click. The guide keeps resolving the ref until the target appears.",
         autoFocus: true,
         theme: {
           backdrop: {
@@ -272,35 +266,49 @@ export default function App() {
         console.log("[reguide] step changed", event);
       }}
     >
-      <main className="page">
-        <header className="topbar">
-          <h1>reguide demo</h1>
+      <header className="topbar">
+        <h1>reguide demo</h1>
+        <div
+          className="profile-menu-container"
+          onBlur={() => setShowDelayedTarget(false)}
+          onPointerLeave={() => setShowDelayedTarget(false)}
+        >
           <button
             ref={profileRef}
             type="button"
             onClick={() => {
               window.setTimeout(() => {
                 setShowDelayedTarget(true);
-              }, 180);
+              }, 100);
             }}
+            onBlur={()=>setShowDelayedTarget(false)}
           >
             Open profile
           </button>
-        </header>
 
-        {showDelayedTarget && (
-          <section className="panel panel-accent">
-            <h2>Mounted after the click step</h2>
-            <p>
-              This target is rendered after the profile click, which exercises
-              delayed ref resolution for the next tour step.
-            </p>
-            <button ref={delayedMountRef} type="button">
-              Newly mounted target
-            </button>
-          </section>
-        )}
-
+          {showDelayedTarget && (
+            <section
+              ref={delayedMountRef}
+              className="panel panel-accent profile-panel"
+              onPointerLeave={() => setShowDelayedTarget(false)}
+            >
+              <div className="profile-summary">
+                <span className="profile-name">Firstname</span>
+                <br />
+                <span>Lastname</span>
+                <div className="profile-avatar">
+                  FN
+                </div>
+              </div>
+              <p className="profile-panel-copy">
+                This target is rendered after the profile click, which exercises
+                delayed ref resolution for the next tour step.
+              </p>
+            </section>
+          )}
+        </div>
+      </header>
+      <main className="page">
         <section className="panel">
           <label htmlFor="search">Draft a post</label>
           <textarea
@@ -323,7 +331,7 @@ export default function App() {
           </button>
         </section>
         {posts.length > 0 && (
-          <section className="panel" ref={revealedRef}>
+          <section className="panel published-posts" ref={revealedRef}>
             <h2>Published posts</h2>
             <div>
               {posts.map((post, index) => (
@@ -332,10 +340,9 @@ export default function App() {
             </div>
           </section>
         )}
-      </main>
-      <footer>
         <TourLauncher />
-      </footer>
+        <footer></footer>
+      </main>
     </ReguideProvider>
   );
 }

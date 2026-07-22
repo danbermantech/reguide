@@ -10,6 +10,7 @@ import {
 } from 'react'
 import { createPortal } from 'react-dom'
 import type {
+  ReguideButtonText,
   ReguideContextValue,
   ReguidePersistenceOptions,
   ReguideProviderProps,
@@ -118,6 +119,13 @@ const DEFAULT_THEME: ResolvedReguideTheme = {
     borderRadius: 12,
     padding: 8,
   },
+}
+
+const DEFAULT_BUTTON_TEXT: Required<ReguideButtonText> = {
+  back: 'Back',
+  next: 'Next',
+  skip: 'Skip',
+  close: 'Close',
 }
 
 const ReguideContext = createContext<ReguideContextValue | null>(null)
@@ -322,6 +330,7 @@ export function ReguideProvider({
   children,
   initialOpen = false,
   theme,
+  buttonText,
   persistence,
   onStart,
   onStop,
@@ -393,6 +402,17 @@ export function ReguideProvider({
     theme?.card?.className,
     currentStep?.theme?.card?.className,
   )
+
+  function resolveButtonText(button: keyof ReguideButtonText): string {
+    return currentStep?.buttonText?.[button] ?? buttonText?.[button] ?? DEFAULT_BUTTON_TEXT[button]
+  }
+
+  const resolvedButtonText: Required<ReguideButtonText> = {
+    back: resolveButtonText('back'),
+    next: resolveButtonText('next'),
+    skip: resolveButtonText('skip'),
+    close: resolveButtonText('close'),
+  }
 
   const enqueueAction = useCallback((action: () => Promise<void>) => {
     const run = actionQueueRef.current
@@ -814,14 +834,14 @@ export function ReguideProvider({
 
   const canGoPrev = currentStepIndex > 0
   const isLastStep = currentStepIndex === steps.length - 1
-  const hideNextButton = stepMode === 'click'
+  const interactionDrivenProgress = stepMode === 'click'
     || (stepMode === 'custom' && currentStep?.mode === 'custom' && Boolean(currentStep.progressOnValidate))
   const modeRequirement = stepMode === 'interact'
     ? interactionSatisfied
     : stepMode === 'custom'
       ? customValidationSatisfied
       : true
-  const canGoNext = !isLastStep && modeRequirement
+  const canGoNext = !isLastStep && modeRequirement && !interactionDrivenProgress
 
   const value = useMemo<ReguideContextValue>(
     () => ({
@@ -915,38 +935,40 @@ export function ReguideProvider({
                   ? <p className="reguide-body">{bodyContent}</p>
                   : <div className="reguide-body">{bodyContent}</div>}
                 <div className="reguide-actions">
-                  {!isLastStep
-                    ? (
-                        <button type="button" onClick={stop}>
-                          Close
-                        </button>
-                      )
-                    : null}
-                  <button type="button" onClick={prev} disabled={!canGoPrev}>
-                    Back
-                  </button>
-                  {isLastStep
-                    ? (
-                        <button
-                          type="button"
-                          data-kind="primary"
-                          onClick={stop}
-                        >
-                          Close
-                        </button>
-                      )
-                    : !hideNextButton
+                  <div className="reguide-actions-left">
+                    {!isLastStep
                       ? (
-                        <button
-                          type="button"
-                          data-kind="primary"
-                          onClick={next}
-                          disabled={!canGoNext}
-                        >
-                          Next
-                        </button>
+                          <button type="button" onClick={stop}>
+                            {resolvedButtonText.skip}
+                          </button>
                         )
                       : null}
+                  </div>
+                  <div className="reguide-actions-right">
+                    <button type="button" onClick={prev} disabled={!canGoPrev}>
+                      {resolvedButtonText.back}
+                    </button>
+                    {isLastStep
+                      ? (
+                          <button
+                            type="button"
+                            data-kind="primary"
+                            onClick={stop}
+                          >
+                            {resolvedButtonText.close}
+                          </button>
+                        )
+                      : (
+                          <button
+                            type="button"
+                            data-kind="primary"
+                            onClick={next}
+                            disabled={!canGoNext}
+                          >
+                            {resolvedButtonText.next}
+                          </button>
+                        )}
+                  </div>
                 </div>
               </div>
             </div>,

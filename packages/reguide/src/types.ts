@@ -66,6 +66,13 @@ export interface ReguideHighlightTheme {
   padding?: number
 }
 
+export interface ReguideButtonText {
+  back?: string
+  next?: string
+  skip?: string
+  close?: string
+}
+
 export interface ReguideTheme {
   backdrop?: ReguideBackdropTheme
   card?: ReguideCardTheme
@@ -104,6 +111,7 @@ interface ReguideStepBase {
   body: ReactNode
   autoFocus?: boolean
   theme?: ReguideTheme
+  buttonText?: ReguideButtonText
 }
 
 export interface ReguideCustomStep extends ReguideStepBase {
@@ -122,6 +130,7 @@ export interface ReguideProviderProps extends PropsWithChildren {
   steps: ReguideStep[]
   initialOpen?: boolean
   theme?: ReguideTheme
+  buttonText?: ReguideButtonText
   persistence?: ReguidePersistenceOptions
   onStart?: () => ReguideLifecycleCallbackResult
   onStop?: (event: ReguideStopEvent) => ReguideLifecycleCallbackResult
